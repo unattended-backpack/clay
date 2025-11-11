@@ -1,6 +1,10 @@
 ## Clay
 
-We are the clay, and you are our potter; we are all the work of your hand. Clay is a template repository from which we may create new projects.
+[![CodeQL](https://github.com/unattended-backpack/clay/actions/workflows/codeql.yml/badge.svg)](https://github.com/unattended-backpack/clay/actions/workflows/codeql.yml) [![Create Release](https://github.com/unattended-backpack/clay/actions/workflows/release.yml/badge.svg)](https://github.com/unattended-backpack/clay/actions/workflows/release.yml)
+
+> We are the clay, and you are our potter; we are all the work of your hand.
+
+Clay is a template repository from which we may create new projects.
 
 ## Building
 
