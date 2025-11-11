@@ -1,0 +1,13 @@
+[package]
+name = "clay"
+version = "0.1.0"
+edition = "2024"
+authors = ["Tim Clancy <tim-clancy.eth>"]
+description = "We are the clay, and you are our potter; we are all the work of your hand."
+license-file = "LicenseRef-VPL WITH AGPL-3.0-only"
+repository = "https://github.com/unattended-backpack/clay"
+homepage = "https://github.com/unattended-backpack/clay"
+readme = "README.md"
+
+[dependencies]
+dotenvy = "0.15"

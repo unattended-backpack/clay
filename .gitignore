@@ -1,0 +1,10 @@
+# Local secrets and configuration.
+.act-secrets/
+.env
+.env.maintainer.local
+
+# Build artifacts.
+/target
+/out
+result
+result-*
