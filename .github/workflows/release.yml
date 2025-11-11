@@ -134,6 +134,8 @@ jobs:
 
     - name: Run tests
       id: tests
+      env:
+        CARGO_HOME: ${{ github.workspace }}/.cargo
       run: |
         echo "Running tests using 'make test'..."
 
