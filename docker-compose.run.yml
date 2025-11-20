@@ -1,0 +1,24 @@
+services:
+  clay:
+    image: clay:latest
+    container_name: clay
+    networks:
+      - network
+    env_file:
+      - .env
+    environment:
+      - RUST_LOG=info
+
+  potter:
+    image: potter:latest
+    container_name: potter
+    networks:
+      - network
+    env_file:
+      - .env
+    environment:
+      - RUST_LOG=info
+
+networks:
+  network:
+    driver: bridge

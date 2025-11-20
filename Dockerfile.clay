@@ -1,13 +1,33 @@
+# Retrieve a specified image for building.
+ARG BUILD_IMAGE=unattended/petros:latest
+
 # Retrieve a specified image for final container runtime.
 ARG RUNTIME_IMAGE=debian:trixie-slim@sha256:66b37a5078a77098bfc80175fb5eb881a3196809242fd295b25502854e12cbec
 
-# This Dockerfile is intended for CI pipeline use and copies an existing binary.
-# It requires pre-built binaries in ./out/ directory.
-FROM scratch AS check-binaries
+# Build from the base image.
+FROM ${BUILD_IMAGE} AS builder
 
-# Verify binaries exist before proceeding.
-COPY ./out/clay /clay
+# Build type: "source" (default) or "prebuilt" (CI)
+ARG BUILD_TYPE=source
 
+# Prepare the build image.
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY src/ src/
+
+# Conditionally build from source or use a pre-built binary.
+COPY out/ /build/out/
+RUN if [ "$BUILD_TYPE" = "prebuilt" ]; then \
+  echo "Using pre-built binary from ./out/clay"; \
+  test -f /build/out/clay || (echo "ERROR: BUILD_TYPE=prebuilt but no binary found in ./out/clay" >&2 && exit 1); \
+  cp /build/out/clay /build/clay-binary; \
+else \
+  echo "Building from source ..."; \
+  cargo build --release --bin clay; \
+  cp /build/target/release/clay /build/clay-binary; \
+fi
+
+# Prepare a runtime container.
 FROM ${RUNTIME_IMAGE}
 
 # OCI image labels for metadata and documentation.
@@ -17,8 +37,8 @@ LABEL org.opencontainers.image.description="Clay is a template repository."
 LABEL org.opencontainers.image.vendor="Unattended Backpack, Inc."
 LABEL org.opencontainers.image.licenses="LicenseRef-VPL WITH AGPL-3.0-only"
 
-# Copy the built binaries.
-COPY --from=check-binaries /clay /usr/local/bin/clay
+# Copy binaries from builder.
+COPY --from=builder /build/clay-binary /usr/local/bin/clay
 
 # Install runtime dependencies and fix binary interpreter.
 RUN apt-get update && \
@@ -31,8 +51,8 @@ RUN apt-get update && \
   rm -rf /var/lib/apt/lists/*
 
 # Prepare specific non-root user for security.
-RUN useradd --system --create-home --shell /bin/bash clay
-RUN chown clay:clay /usr/local/bin/clay
+RUN useradd --system --create-home --shell /bin/bash clay && \
+  chown clay:clay /usr/local/bin/clay
 USER clay
 WORKDIR /home/clay
 ENTRYPOINT ["/usr/local/bin/clay"]

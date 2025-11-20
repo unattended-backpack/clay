@@ -10,9 +10,9 @@ Clay is a template repository from which we may create new projects.
 
 To build locally, you should simply need to run `make`; you can see more in the [`Makefile`](./Makefile). This will default to building with the maintainer-provided details from [`.env.maintainer`](./.env.maintainer), which we will periodically update as details change.
 
-You can also build a Docker image using `make docker`, which uses a `BUILD_IMAGE` for building dependencies that are packaged to run in a `RUNTIME_IMAGE`. Configuration values in `.env.maintainer` may be overridden by specifying them as environment variables.
+You can also build container images using `make docker`, which uses a `BUILD_IMAGE` for building dependencies that are packaged to run in a `RUNTIME_IMAGE`. Configuration values in `.env.maintainer` may be overridden by specifying them as environment variables, including specific image names.
 ```bash
-IMAGE_NAME=clay
+CLAY_NAME=clay POTTER_NAME=potter make docker
 BUILD_IMAGE=registry.digitalocean.com/sigil/petros:latest make build
 RUNTIME_IMAGE=debian:bookworm-slim@sha256:... make build
 ```
@@ -72,7 +72,8 @@ DH_USERNAME=unattended
 
 Public configuration that anyone building this project needs is stored in the repository at [`.env.maintainer`](./.env.maintainer):
 
-- `IMAGE_NAME` - The name of the Docker image.
+- `CLAY_NAME` - The published name for the Clay Docker image.
+- `POTTER_NAME` - The published name for the Potter Docker image.
 - `BUILD_IMAGE` - The builder image for compiling Rust code (default: `unattended/petros:latest`).
 - `RUNTIME_IMAGE` - The runtime base image (default: pinned `debian:trixie-slim@sha256:...`).
 
@@ -82,11 +83,12 @@ This file is version-controlled and updated by maintainers as infrastructure det
 
 All releases include GPG-signed artifacts for verification. Each release contains:
 
-- `image-digests.txt` - A human-readable list of container image digests.
+- `image-digests.txt` - A human-readable list of all container image digests.
 - `image-digests.txt.asc` - A GPG signature for the digest list.
-- `ghcr-manifest.json` / `ghcr-manifest.json.asc` - A GitHub Container Registry OCI manifest and signature.
-- `dh-manifest.json` / `dh-manifest.json.asc` - A Docker Hub OCI manifest and signature.
-- `do-manifest.json` / `do-manifest.json.asc` - A DigitalOcean Container Registry OCI manifest and signature.
+- Per-image manifests and signatures for each built image:
+  - `<image>-ghcr-manifest.json` / `<image>-ghcr-manifest.json.asc` - GitHub Container Registry OCI manifest and signature.
+  - `<image>-dh-manifest.json` / `<image>-dh-manifest.json.asc` - Docker Hub OCI manifest and signature.
+  - `<image>-do-manifest.json` / `<image>-do-manifest.json.asc` - DigitalOcean Container Registry OCI manifest and signature.
 
 ### Quick Verification
 
@@ -99,10 +101,10 @@ echo "<GPG_PUBLIC_KEY>" | base64 -d | gpg --import
 # Verify digest list.
 gpg --verify image-digests.txt.asc image-digests.txt
 
-# Verify image manifests.
-gpg --verify ghcr-manifest.json.asc ghcr-manifest.json
-gpg --verify dh-manifest.json.asc dh-manifest.json
-gpg --verify do-manifest.json.asc do-manifest.json
+# Verify image manifests for each image.
+gpg --verify <image>-ghcr-manifest.json.asc <image>-ghcr-manifest.json
+gpg --verify <image>-dh-manifest.json.asc <image>-dh-manifest.json
+gpg --verify <image>-do-manifest.json.asc <image>-do-manifest.json
 ```
 
 ### Manifest Verification

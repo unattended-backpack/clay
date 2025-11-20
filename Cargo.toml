@@ -9,5 +9,13 @@ repository = "https://github.com/unattended-backpack/clay"
 homepage = "https://github.com/unattended-backpack/clay"
 readme = "README.md"
 
+[[bin]]
+name = "clay"
+path = "src/clay.rs"
+
+[[bin]]
+name = "potter"
+path = "src/potter.rs"
+
 [dependencies]
 dotenvy = "0.15"

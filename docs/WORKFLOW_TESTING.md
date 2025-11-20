@@ -36,10 +36,10 @@ cat > .act-secrets/registry.env <<'EOF'
 #   BUILD_IMAGE=unattended/petros:latest
 BUILD_IMAGE=unattended/petros:latest
 
-# The name of the DigitalOcean registry to publish the built image to.
+# The name of the DigitalOcean registry to publish any built images to.
 DO_REGISTRY_NAME=sigil
 
-# The username of the Docker Hub account to publish the built image to.
+# The username of the Docker Hub account to publish any built images to.
 DH_USERNAME=unattended
 EOF
 
