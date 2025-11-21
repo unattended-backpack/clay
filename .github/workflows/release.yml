@@ -213,15 +213,18 @@ jobs:
 
     - name: Discover images from .env.maintainer
       id: discover
+      shell: bash
+      working-directory: ${{ github.workspace }}
       run: |
         set -e
 
-        cd ${{ github.workspace }}
-
-        # Source .env.maintainer to get *_NAME variables
-        ENV_FILE="${{ github.workspace }}/.env.maintainer"
+        # Working directory is now set to workspace
+        ENV_FILE=".env.maintainer"
         if [ ! -f "$ENV_FILE" ]; then
           echo "❌ .env.maintainer not found!"
+          echo "Current directory: $(pwd)"
+          echo "Files in current directory:"
+          ls -la
           exit 1
         fi
 
