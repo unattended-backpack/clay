@@ -15,7 +15,9 @@
 BUILD_IMAGE ?= unattended/petros:latest
 RUNTIME_IMAGE ?= debian:trixie-slim
 DOCKER_BUILD_ARGS ?=
-IMAGE_NAME ?= clay
+DOCKER_RUN_ARGS ?=
+CLAY_NAME ?= clay
+POTTER_NAME ?= potter
 IMAGE_TAG ?= latest
 ACT_PULL ?= true
 
@@ -46,8 +48,10 @@ clean:
 build:
 	@echo "Building native artifacts ..."
 	mkdir -p out
-	cargo build --release
+	cargo build --release --bin clay
+	cargo build --release --bin potter
 	cp ./target/release/clay ./out/clay
+	cp ./target/release/potter ./out/potter
 	@echo "Build complete."
 
 .PHONY: test
@@ -56,57 +60,140 @@ test:
 	cargo test --release
 	@echo "... tests completed."
 
-.PHONY: docker
-docker:
-	@echo "Building Docker image ..."
+.PHONY: docker-c
+docker-c:
+	@echo "Building Clay image ..."
 	@echo "  Build image:   $(BUILD_IMAGE)"
 	@echo "  Runtime image: $(RUNTIME_IMAGE)"
-	@echo "  Output tag:    $(IMAGE_NAME):$(IMAGE_TAG)"
+	@echo "  Output tag:    $(CLAY_NAME):$(IMAGE_TAG)"
+	@mkdir -p out
 	docker build \
 		$(DOCKER_BUILD_ARGS) \
 		--build-arg BUILD_IMAGE=$(BUILD_IMAGE) \
 		--build-arg RUNTIME_IMAGE=$(RUNTIME_IMAGE) \
-		-t $(IMAGE_NAME):$(IMAGE_TAG) \
+		-f Dockerfile.clay \
+		-t $(CLAY_NAME):$(IMAGE_TAG) \
 		.
-	@echo "Build complete: $(IMAGE_NAME):$(IMAGE_TAG)"
+	@echo "Build complete: $(CLAY_NAME):$(IMAGE_TAG)"
+
+.PHONY: docker-p
+docker-p:
+	@echo "Building Potter image ..."
+	@echo "  Build image:   $(BUILD_IMAGE)"
+	@echo "  Runtime image: $(RUNTIME_IMAGE)"
+	@echo "  Output tag:    $(POTTER_NAME):$(IMAGE_TAG)"
+	@mkdir -p out
+	docker build \
+		$(DOCKER_BUILD_ARGS) \
+		--build-arg BUILD_IMAGE=$(BUILD_IMAGE) \
+		--build-arg RUNTIME_IMAGE=$(RUNTIME_IMAGE) \
+		-f Dockerfile.potter \
+		-t $(POTTER_NAME):$(IMAGE_TAG) \
+		.
+	@echo "Build complete: $(POTTER_NAME):$(IMAGE_TAG)"
+
+.PHONY: docker
+docker:
+	$(MAKE) docker-c
+	$(MAKE) docker-p
 
 .PHONY: ci
 ci:
-	@echo "Building Docker image from pre-built binaries (CI mode) ..."
-	@if [ ! -f out/clay ]; then \
+	@echo "Building Docker images from pre-built binaries (CI mode) ..."
+	@if [ ! -f out/clay ] || [ ! -f out/potter ]; then \
 		echo "ERROR: Pre-built binaries not found in ./out/" >&2; \
 		echo "Run 'make build' first to create the binaries." >&2; \
 		exit 1; \
 	fi
+	@echo "  Build image:   $(BUILD_IMAGE)"
 	@echo "  Runtime image: $(RUNTIME_IMAGE)"
-	@echo "  Output tag:    $(IMAGE_NAME):$(IMAGE_TAG)"
+	@echo "  Output tag:    $(CLAY_NAME):$(IMAGE_TAG)"
 	docker build \
 		$(DOCKER_BUILD_ARGS) \
+		--build-arg BUILD_TYPE=prebuilt \
+		--build-arg BUILD_IMAGE=$(BUILD_IMAGE) \
 		--build-arg RUNTIME_IMAGE=$(RUNTIME_IMAGE) \
-		-f Dockerfile.ci \
-		-t $(IMAGE_NAME):$(IMAGE_TAG) \
+		-f Dockerfile.clay \
+		-t $(CLAY_NAME):$(IMAGE_TAG) \
 		.
-	@echo "Build complete: $(IMAGE_NAME):$(IMAGE_TAG)"
+	@echo "Build complete: $(CLAY_NAME):$(IMAGE_TAG)"
+	@echo "  Build image:   $(BUILD_IMAGE)"
+	@echo "  Runtime image: $(RUNTIME_IMAGE)"
+	@echo "  Output tag:    $(POTTER_NAME):$(IMAGE_TAG)"
+	docker build \
+		$(DOCKER_BUILD_ARGS) \
+		--build-arg BUILD_TYPE=prebuilt \
+		--build-arg BUILD_IMAGE=$(BUILD_IMAGE) \
+		--build-arg RUNTIME_IMAGE=$(RUNTIME_IMAGE) \
+		-f Dockerfile.potter \
+		-t $(POTTER_NAME):$(IMAGE_TAG) \
+		.
+	@echo "Build complete: $(POTTER_NAME):$(IMAGE_TAG)"
 
-.PHONY: run
-run:
+.PHONY: run-c
+run-c:
 	@if [ ! -f .env ]; then \
 		echo "ERROR: .env not found" >&2; \
 		echo "Run 'make init' to create configuration files." >&2; \
 		exit 1; \
 	fi
-	@echo "Starting container ..."
+	@echo "Starting Clay container ..."
 	docker run --rm -it \
-		--name $(IMAGE_NAME) \
+		--name $(CLAY_NAME) \
+		$(DOCKER_RUN_ARGS) \
 		--env-file .env \
-		$(IMAGE_NAME):$(IMAGE_TAG)
+		$(CLAY_NAME):$(IMAGE_TAG)
 
-.PHONY: shell
-shell:
-	@echo "Opening shell in container ..."
+.PHONY: stop-c
+stop-c:
+	@echo "Stopping Clay container..."
+	docker stop $(CLAY_NAME)
+	docker rm $(CLAY_NAME) || true
+
+.PHONY: run-p
+run-p:
+	@if [ ! -f .env ]; then \
+		echo "ERROR: .env not found" >&2; \
+		echo "Run 'make init' to create configuration files." >&2; \
+		exit 1; \
+	fi
+	@echo "Starting Potter container ..."
+	docker run --rm -it \
+		--name $(POTTER_NAME) \
+		$(DOCKER_RUN_ARGS) \
+		--env-file .env \
+		$(POTTER_NAME):$(IMAGE_TAG)
+
+.PHONY: stop-p
+stop-p:
+	@echo "Stopping Potter container..."
+	docker stop $(POTTER_NAME)
+	docker rm $(POTTER_NAME) || true
+
+.PHONY: shell-c
+shell-c:
+	@echo "Opening shell in Clay ..."
 	docker run --rm -it \
 		--entrypoint /bin/bash \
-		$(IMAGE_NAME):$(IMAGE_TAG)
+		$(CLAY_NAME):$(IMAGE_TAG)
+
+.PHONY: shell-p
+shell-p:
+	@echo "Opening shell in Potter ..."
+	docker run --rm -it \
+		--entrypoint /bin/bash \
+		$(POTTER_NAME):$(IMAGE_TAG)
+
+.PHONY: run
+run:
+	$(MAKE) build
+	$(MAKE) ci
+	@echo "Starting Clay and Potter ..."
+	docker-compose -f docker-compose.run.yml up \
+		--abort-on-container-exit
+	@echo "Cleaning up containers ..."
+	docker-compose -f docker-compose.run.yml down -v
+	@echo "... cleanup complete."
 
 .PHONY: act
 act:
@@ -120,9 +207,9 @@ act:
 	@sudo rm -rf /opt/github-runner/secrets
 	@sudo ln -s $(CURDIR)/.act-secrets /opt/github-runner/secrets
 	@trap "sudo rm -f /opt/github-runner/secrets" EXIT; \
-	DOCKER_HOST="" act push -j release \
-		--container-daemon-socket=- \
+	DOCKER_HOST="" act push -W .github/workflows/release.yml \
 		--container-options "-v /opt/github-runner/secrets:/opt/github-runner/secrets:ro" \
+		--artifact-server-path=/tmp/act-artifacts \
 		--pull=$(ACT_PULL) \
 		$(if $(DOCKER_BUILD_ARGS),--env DOCKER_BUILD_ARGS="$(DOCKER_BUILD_ARGS)")
 
@@ -135,10 +222,17 @@ help:
 	@echo "  clean           Clean output directories."
 	@echo "  build           Build native binaries."
 	@echo "  test            Run all tests for the build."
-	@echo "  docker          Build Docker image (compiles inside container)."
-	@echo "  ci              Build Docker image from pre-built binaries."
-	@echo "  run             Run the built Docker image locally."
-	@echo "  shell           Open a shell in the Docker image."
+	@echo "  docker-c        Build just the Clay image."
+	@echo "  docker-p        Build just the Potter image."
+	@echo "  docker          Build Docker images (compiles inside container)."
+	@echo "  ci              Build Docker images from pre-built binaries."
+	@echo "  run-c           Run the built Clay image locally."
+	@echo "  run-p           Run the built Potter image locally."
+	@echo "  run             Run the built Docker images locally."
+	@echo "  stop-c          Stop the running Clay container."
+	@echo "  stop-p          Stop the running Potter container."
+	@echo "  shell-c         Open a shell in the Clay image."
+	@echo "  shell-p         Open a shell in the Potter image."
 	@echo "  act             Test GitHub Actions release workflow locally."
 	@echo "  help            Show this help message."
 	@echo ""
@@ -147,14 +241,17 @@ help:
 	@echo "  Override with environment variables:"
 	@echo "    BUILD_IMAGE        - Builder image."
 	@echo "    RUNTIME_IMAGE      - Runtime base image."
-	@echo "    IMAGE_NAME         - Docker image name."
+	@echo "    CLAY_NAME          - Clay Docker image name."
+	@echo "    POTTER_NAME        - Potter Docker image name."
 	@echo "    IMAGE_TAG          - Docker image tag."
 	@echo "    DOCKER_BUILD_ARGS  - Additional Docker build flags."
+	@echo "    DOCKER_RUN_ARGS    - Additional Docker run flags."
 	@echo ""
 	@echo "Examples:"
 	@echo "  make build"
 	@echo "  BUILD_IMAGE=unattended/petros:latest make build"
 	@echo "  IMAGE_TAG=v1.0.0 make build"
 	@echo "  DOCKER_BUILD_ARGS='--network host' make build"
+	@echo "  DOCKER_RUN_ARGS='--network host' make run-c"
 
 .DEFAULT_GOAL := build
