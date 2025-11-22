@@ -334,13 +334,19 @@ jobs:
         echo "DH_TOKEN=$DH_TOKEN" >> $GITHUB_ENV
         echo "CI_GH_CLASSIC_PAT=$CI_GH_CLASSIC_PAT" >> $GITHUB_ENV
 
-        # Load public config from repository
+        # Load public config from repository and export all variables
         . "$GITHUB_WORKSPACE/.env.maintainer"
 
-        # Export all *_NAME variables to environment
-        for var in $(compgen -v | grep '_NAME$'); do
+        # Export all variables from .env.maintainer to GITHUB_ENV
+        # This allows projects to add any custom build args they need
+        while IFS='=' read -r var value; do
+          # Skip comments and empty lines
+          [[ "$var" =~ ^[[:space:]]*# ]] && continue
+          [[ -z "$var" ]] && continue
+
+          # Export the variable
           echo "${var}=${!var}" >> $GITHUB_ENV
-        done
+        done < "$GITHUB_WORKSPACE/.env.maintainer"
 
         # Load registry configuration
         . /opt/github-runner/secrets/registry.env
@@ -355,12 +361,29 @@ jobs:
       run: |
         echo "Building $MATRIX_IMAGE (will publish as: $IMAGE_NAME)"
 
+        # Build dynamic build args from all .env.maintainer variables
+        # Skip BUILD_IMAGE and RUNTIME_IMAGE as they come from authenticate job
+        BUILD_ARGS=""
+        while IFS='=' read -r var value; do
+          # Skip comments and empty lines
+          [[ "$var" =~ ^[[:space:]]*# ]] && continue
+          [[ -z "$var" ]] && continue
+
+          # Skip BUILD_IMAGE and RUNTIME_IMAGE (passed explicitly from authenticate job)
+          [[ "$var" == "BUILD_IMAGE" ]] && continue
+          [[ "$var" == "RUNTIME_IMAGE" ]] && continue
+
+          # Add as build arg (use env var which was sourced earlier)
+          BUILD_ARGS="$BUILD_ARGS --build-arg ${var}=${!var}"
+        done < "$GITHUB_WORKSPACE/.env.maintainer"
+
         # Build image using the Dockerfile for this matrix entry
         docker build \
           ${DOCKER_BUILD_ARGS} \
           --build-arg BUILD_TYPE=prebuilt \
           --build-arg BUILD_IMAGE="${{ needs.authenticate.outputs.build-image }}" \
           --build-arg RUNTIME_IMAGE="${{ needs.authenticate.outputs.runtime-image }}" \
+          ${BUILD_ARGS} \
           -f Dockerfile.$MATRIX_IMAGE \
           -t $IMAGE_NAME:${{ github.sha }} \
           .

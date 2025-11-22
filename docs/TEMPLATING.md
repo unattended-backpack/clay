@@ -40,6 +40,10 @@ That's it! The workflow will automatically:
 - Push to all configured registries
 - Sign and release artifacts
 
+## Specify Languages
+
+Update the [CodeQL workflow](../.github/workflows/codeql.yml) to specify the relevant languages that you would like to scan for.
+
 ## Adding a New Image
 
 To add a new image to an existing project:
